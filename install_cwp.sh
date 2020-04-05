@@ -1,36 +1,20 @@
 #!/bin/bash
+
+fallocate -l 1G /swapfile
+dd if=/dev/zero of=/swapfile bs=1024 count=1048576
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+sudo -- bash -c 'echo "/swapfile swap swap defaults 0 0" >> /etc/fstab'
+
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 HOSTNAME=$(hostname -f)
 
-echo "██╗    ██╗███╗   ██╗██████╗  ██████╗ ██╗    ██╗███████╗██████╗     ██████╗ ██████╗ ███╗   ███╗"
-echo "██║    ██║████╗  ██║██╔══██╗██╔═══██╗██║    ██║██╔════╝██╔══██╗   ██╔════╝██╔═══██╗████╗ ████║"
-echo "██║ █╗ ██║██╔██╗ ██║██████╔╝██║   ██║██║ █╗ ██║█████╗  ██████╔╝   ██║     ██║   ██║██╔████╔██║"
-echo "██║███╗██║██║╚██╗██║██╔═══╝ ██║   ██║██║███╗██║██╔══╝  ██╔══██╗   ██║     ██║   ██║██║╚██╔╝██║"
-echo "╚███╔███╔╝██║ ╚████║██║     ╚██████╔╝╚███╔███╔╝███████╗██║  ██║██╗╚██████╗╚██████╔╝██║ ╚═╝ ██║"
-echo " ╚══╝╚══╝ ╚═╝  ╚═══╝╚═╝      ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═════╝ ╚═╝     ╚═╝"
-
-echo ""
-echo "       ####################### CentOS Web Panel Configurator #######################          "
-echo ""
-echo ""
-
-if [ ! -f /etc/redhat-release ]; then
-	echo "No se detectó CentOS. Abortando."
-	exit 0
-fi
-
-echo "Este script instala y pre-configura CentOS Web Panel (CTRL + C para cancelar)"
-sleep 10
-
-echo "####### CONFIGURANDO CENTOS #######"
 wget https://raw.githubusercontent.com/wnpower/Linux-Config/master/configure_centos.sh -O "$CWD/configure_centos.sh" && bash "$CWD/configure_centos.sh"
 
-echo "####### PRE-CONFIGURACION CWP ##########"
-echo "Desactivando yum-cron..."
 yum erase yum-cron -y
 
-echo "######### CONFIGURANDO DNS Y RED ########"
 RED=$(route -n | awk '$1 == "0.0.0.0" {print $8}')
 ETHCFG="/etc/sysconfig/network-scripts/ifcfg-$RED"
 
@@ -38,12 +22,9 @@ sed -i '/^NM_CONTROLLED=.*/d' $ETHCFG
 sed -i '/^DNS1=.*/d' $ETHCFG
 sed -i '/^DNS2=.*/d' $ETHCFG
 	
-echo "Configurando red..."
 echo "PEERDNS=no" >> $ETHCFG
 echo "DNS1=8.8.8.8" >> $ETHCFG
 echo "DNS2=8.8.4.4" >> $ETHCFG
-
-echo "Reescribiendo /etc/resolv.conf..."
 
 echo "options timeout:5 attempts:2" > /etc/resolv.conf
 echo "nameserver 208.67.222.222" >> /etc/resolv.conf # OpenDNS
@@ -53,22 +34,13 @@ echo "nameserver 199.85.126.10" >> /etc/resolv.conf # Norton
 echo "nameserver 8.26.56.26" >> /etc/resolv.conf # Comodo
 echo "nameserver 209.244.0.3" >> /etc/resolv.conf # Level3
 echo "nameserver 8.8.4.4" >> /etc/resolv.conf # Google
-echo "######### FIN CONFIGURANDO DNS Y RED ########"
 
-echo "####### INSTALANDO CWP #######"
 if [ -d /usr/local/cwpsrv/ ]; then
-        echo "CWP ya detectado, no se instala, sólo se configura (CTRL + C para cancelar)"
-        sleep 10
 else
-	echo "Se va a instalar CWP. Al final de la instalación recuerda tomar nota de los datos de acceso que te brinde y reincia el sistema."
-	sleep 15
-        cd /usr/local/src; wget http://centos-webpanel.com/cwp-el7-latest; sh cwp-el7-latest
-	echo ""
+        cd /usr/local/src; wget http://centos-webpanel.com/cwp-el7-latest; sh cwp-el7-latest --phpfpm 7.3 --softaculous yes
 	exit 1
 fi
-echo "####### FIN INSTALANDO CWP #######"
 
-echo "####### CONFIGURANDO CSF #######"
 if [ ! -d /etc/csf ]; then
         echo "csf no detectado, descargando!"
 	touch /etc/sysconfig/iptables
@@ -80,7 +52,6 @@ if [ ! -d /etc/csf ]; then
 	cd /root && rm -f ./csf.tgz; wget https://download.configserver.com/csf.tgz && tar xvfz ./csf.tgz && cd ./csf && sh ./install.sh
 fi
 
-echo " Configurando CSF..."
 yum -y install iptables-services wget perl unzip net-tools perl-libwww-perl perl-LWP-Protocol-https perl-GDGraph
 
 sed -i 's/^TESTING = .*/TESTING = "0"/g' /etc/csf/csf.conf
@@ -112,8 +83,6 @@ sed -i 's/^LF_PERMBLOCK_INTERVAL = .*/LF_PERMBLOCK_INTERVAL = "14400"/g' /etc/cs
 sed -i 's/^LF_INTERVAL = .*/LF_INTERVAL = "900"/g' /etc/csf/csf.conf
 sed -i 's/^PS_INTERVAL = .*/PS_INTERVAL = "60"/g' /etc/csf/csf.conf
 sed -i 's/^PS_LIMIT = .*/PS_LIMIT = "20"/g' /etc/csf/csf.conf
-
-echo "Deshabilitando alertas..."
 
 sed -i 's/^LF_PERMBLOCK_ALERT = .*/LF_PERMBLOCK_ALERT = "0"/g' /etc/csf/csf.conf
 sed -i 's/^LF_NETBLOCK_ALERT = .*/LF_NETBLOCK_ALERT = "0"/g' /etc/csf/csf.conf
@@ -164,12 +133,9 @@ cat > /etc/csf/csf.rignore << EOF
 .crawl.yahoo.net
 .search.msn.com
 EOF
-
-echo "Activando DYNDNS..."
 sed -i 's/^DYNDNS = .*/DYNDNS = "300"/' /etc/csf/csf.conf
 sed -i 's/^DYNDNS_IGNORE = .*/DYNDNS_IGNORE = "1"/' /etc/csf/csf.conf
 
-echo "Agregando a csf.dyndns..."
 sed -i '/gmail.com/d' /etc/csf/csf.dyndns
 sed -i '/public.pyzor.org/d' /etc/csf/csf.dyndns
 echo "tcp|out|d=25|d=smtp.gmail.com" >> /etc/csf/csf.dyndns
@@ -180,7 +146,6 @@ echo "tcp|out|d=993|d=imap.gmail.com" >> /etc/csf/csf.dyndns
 echo "tcp|out|d=143|d=imap.gmail.com" >> /etc/csf/csf.dyndns
 echo "udp|out|d=24441|d=public.pyzor.org" >> /etc/csf/csf.dyndns
 
-echo "Activando soporte para IPV6..."
 sed -i 's/^IPV6 = .*/IPV6 = "1"/' /etc/csf/csf.conf
 TCP_IN=$(grep "^TCP_IN = " /etc/csf/csf.conf | awk '{ print $3 }')
 TCP_OUT=$(grep "^TCP_OUT = " /etc/csf/csf.conf | awk '{ print $3 }')
@@ -192,7 +157,6 @@ sed -i "s/^TCP6_OUT = .*/TCP6_OUT = $TCP_OUT/" /etc/csf/csf.conf
 sed -i "s/^UDP6_IN = .*/UDP6_IN = $UDP_IN/" /etc/csf/csf.conf
 sed -i "s/^UDP6_OUT = .*/UDP6_OUT = $UDP_OUT/" /etc/csf/csf.conf
 
-echo "Configurando puertos adicionales..."
 ADDITIONAL_PORTS="25,465,587"
 # IPv4
 CURR_CSF_IN=$(grep "^TCP_IN" /etc/csf/csf.conf | cut -d'=' -f2 | sed 's/\ //g' | sed 's/\"//g' | sed "s/,$ADDITIONAL_PORTS,/,/g" | sed "s/,$ADDITIONAL_PORTS//g" | sed "s/$ADDITIONAL_PORTS,//g" | sed "s/,,//g")
@@ -214,9 +178,6 @@ service lfd restart
 chkconfig csf on
 chkconfig lfd on
 
-echo "####### FIN CONFIGURANDO CSF #######"
-
-echo "Configurando PHP..."
 find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^memory_limit.*/memory_limit = 1024M/g'
 find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^enable_dl.*/enable_dl = Off/g'
 find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^expose_php.*/expose_php = Off/g'
@@ -235,7 +196,6 @@ find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^defau
 find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^display_errors.*/display_errors = On/g'
 find /usr/local/php/ /opt/alt/php-fpm*/ -name "php.ini" | xargs sed -i 's/^error_reporting.*/error_reporting = E_ALL \& \~E_DEPRECATED \& \~E_STRICT/g'
 
-echo "Configurando MySQL..."
 sed -i '/^local-infile.*/d' /etc/my.cnf
 sed -i '/^query_cache_type.*/d' /etc/my.cnf
 sed -i '/^query_cache_size.*/d' /etc/my.cnf
@@ -255,19 +215,17 @@ sed  -i '/\[mysqld\]/a # WNPower pre-configured values' /etc/my.cnf
 
 service mysql restart
 
-echo "Configurando hora del servidor..."
 yum install ntpdate -y
-echo "Sincronizando fecha con pool.ntp.org..."
+
 ntpdate 0.pool.ntp.org 1.pool.ntp.org 2.pool.ntp.org 3.pool.ntp.org 0.south-america.pool.ntp.org
 if [ -f /usr/share/zoneinfo/America/Buenos_Aires ]; then
         echo "Seteando timezone a America/Buenos_Aires..."
         mv /etc/localtime /etc/localtime.old
         ln -s /usr/share/zoneinfo/America/Buenos_Aires /etc/localtime
 fi
-echo "Seteando fecha del BIOS..."
+
 hwclock -r
 
-echo "Configurando Postfix..."
 sed -i '/^inet_protocols.*/d' /etc/postfix/main.cf
 echo "inet_protocols = all" >> /etc/postfix/main.cf
 service postfix restart
@@ -275,4 +233,6 @@ service postfix restart
 history -c
 echo "" > /root/.bash_history
 
-echo "Terminado!"
+echo "Listo el pollo!" > /listo_el_pollo
+
+reboot
